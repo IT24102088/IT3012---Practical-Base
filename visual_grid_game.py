@@ -40,11 +40,19 @@ class VisualGridHuntGame:
         self.collision = False
 
     def get_percept(self) -> dict:
+        x, y = self.agent_pos
+        wall_ahead = False
+        food_here = False
+
+        # Check the cell in the direction the agent is facing (assuming 'Up' as the default direction)
+        if (x, y + 1) in self.walls:
+            wall_ahead = True
+        if (x, y + 1) in self.food_positions:
+            food_here = True
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
+            'wall_ahead': wall_ahead,
+            'food_here': food_here,
             'collision': self.collision,
             'score': self.score,
             'remaining_food': len(self.food_positions)
@@ -184,3 +192,52 @@ if __name__ == "__main__":
     # Try a larger grid size like 12x12 with 15 food and 3 opponents!
     app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
     root.mainloop()
+
+
+    def __init__(self):
+        self.agent = SimpleReflexAgent()
+
+    def run_loop(self):
+        self.btn.config(state="disabled")
+
+        def step():
+            if not self.env.is_done():
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
+                self.env.execute_action(action)
+
+                self.draw_grid()
+                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
+                self.root.after(250, step)
+            else:
+                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
+                self.label.config(text=end_text)
+                self.btn.config(state="normal")
+
+        step()
+
+
+class SimpleReflexAgent:
+    def sense_and_act(self, percept):
+        if percept['smells_food']:
+            return 'suck'
+        elif percept['hit_wall']:
+            return 'turn_left'
+        else:
+            return 'move_forward'
+
+
+class ModelBasedAgent:
+    def __init__(self):
+        self.visited_cells = set()
+
+    def sense_and_act(self, percept):
+        current_pos = tuple(self.env.agent_pos)
+        self.visited_cells.add(current_pos)
+
+        if percept['hit_wall'] and (current_pos[0] - 1, current_pos[1]) in self.visited_cells:
+            return 'turn_right'
+        elif percept['smells_food']:
+            return 'suck'
+        else:
+            return 'move_forward'
