@@ -1,6 +1,7 @@
 # visual_grid_game.py
 import random
 import tkinter as tk
+from agent import SearchAgent
 
 
 class VisualGridHuntGame:
@@ -44,14 +45,14 @@ class VisualGridHuntGame:
         wall_ahead = False
         food_here = False
 
-
-
+        # Check the cell in the direction the agent is facing (assuming 'Up' as the default direction)
         if (x, y + 1) in self.walls:
             wall_ahead = True
         if (x, y + 1) in self.food_positions:
             food_here = True
 
         return {
+            'agent_pos': list(self.agent_pos),
             'wall_ahead': wall_ahead,
             'food_here': food_here,
             'collision': self.collision,
@@ -59,10 +60,7 @@ class VisualGridHuntGame:
             'remaining_food': len(self.food_positions),
             'grid_size': (self.width, self.height),
             'walls': list(self.walls),
-            'all_food': list(self.food_positions),
-            'agent_pos': tuple(self.agent_pos)
-
-            
+            'all_food': list(self.food_positions)
         }
 
     def execute_action(self, action: str):
@@ -110,12 +108,13 @@ class VisualGridHuntGame:
 class GridGameGUI:
     """Tkinter wrapper that dynamically scales cell sizes to keep larger grids on screen."""
 
-    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
+    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, active_algo='BFS'):
         self.root = root
-        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
+        self.root.title(f"IT3012 - Multi-Agent Grid Hunt ({active_algo})")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+        self.agent = SearchAgent(active_algo=active_algo)
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -127,7 +126,7 @@ class GridGameGUI:
         self.canvas = tk.Canvas(root, width=canvas_w, height=canvas_h, bg="white")
         self.canvas.pack()
 
-        self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
+        self.label = tk.Label(root, text=f"Algo: {active_algo} | Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
         self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
@@ -180,11 +179,12 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+                action = self.agent.sense_and_act(percept)
                 self.env.execute_action(action)
 
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
+                self.label.config(text=f"Algo: {self.agent.active_algo} | Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
                 self.root.after(250, step)
             else:
                 end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
@@ -196,55 +196,6 @@ class GridGameGUI:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
+    # Change active_algo between 'BFS', 'DFS', and 'UCS' to observe behavior
+    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0, active_algo='AStar')
     root.mainloop()
-
-
-    def __init__(self):
-        self.agent = SimpleReflexAgent()
-
-    def run_loop(self):
-        self.btn.config(state="disabled")
-
-        def step():
-            if not self.env.is_done():
-                percept = self.env.get_percept()
-                action = self.agent.sense_and_act(percept)
-                self.env.execute_action(action)
-
-                self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
-                self.root.after(250, step)
-            else:
-                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
-                self.label.config(text=end_text)
-                self.btn.config(state="normal")
-
-        step()
-
-
-class SimpleReflexAgent:
-    def sense_and_act(self, percept):
-        if percept['smells_food']:
-            return 'suck'
-        elif percept['hit_wall']:
-            return 'turn_left'
-        else:
-            return 'move_forward'
-
-
-class ModelBasedAgent:
-    def __init__(self):
-        self.visited_cells = set()
-
-    def sense_and_act(self, percept):
-        current_pos = tuple(self.env.agent_pos)
-        self.visited_cells.add(current_pos)
-
-        if percept['hit_wall'] and (current_pos[0] - 1, current_pos[1]) in self.visited_cells:
-            return 'turn_right'
-        elif percept['smells_food']:
-            return 'suck'
-        else:
-            return 'move_forward'
