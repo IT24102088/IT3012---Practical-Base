@@ -3,6 +3,7 @@ from collections import deque
 import heapq
 import random
 import math
+from knowledge_base import KnowledgeBase
 
 
 class SimpleReflexAgent:
@@ -57,8 +58,23 @@ class SearchAgent:
     """Problem-solving agent implementing Uninformed and Informed Graph Search algorithms."""
 
     def __init__(self, active_algo='BFS'):
-        self.plan = []
-        self.active_algo = active_algo
+    self.plan = []
+    self.active_algo = active_algo
+    
+    self.kb = KnowledgeBase()
+    
+
+    self.kb.tell_rule(
+        ['TargetVisible', 'HasDust'],
+        'SafeToEngage'
+    )
+    
+
+    self.kb.tell_rule(
+        ['SafeToEngage', 'BloodseekerMissing'],
+        'Retreat'
+    )
+
 
     def manhattan_distance(self, pos, goal):
         return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
@@ -282,19 +298,42 @@ class SearchAgent:
 
                 if grid_size is not None:
                     w, h = grid_size
-                    if not (0 <= next_pos[0] < w and 0 <= next_pos[1] < h):
-                        continue
+                if not (0 <= next_pos[0] < w and 0 <= next_pos[1] < h):
+                    continue
 
                 if next_pos in walls_set or next_pos in reached_states:
                     continue
 
+                self.kb.clear_facts()
+
+                if percept.get("TargetVisible", False):
+                    self.kb.tell_fact("TargetVisible")
+
+                if percept.get("HasDust", False):
+                    self.kb.tell_fact("HasDust")
+
+                if percept.get("BloodseekerMissing", False):
+                    self.kb.tell_fact("BloodseekerMissing")
+
+                # Run forward chaining
+                self.kb.forward_chain()
+
+                # Skip infeasible tiles
+                if "Retreat" in self.kb.facts:
+                    continue
+
                 g_new = g_cost + 1
+
                 if heuristic_type == 'manhattan':
                     h_new = self.manhattan_distance(next_pos, goal)
                 else:
                     h_new = self.euclidean_distance(next_pos, goal)
+
                 f_new = g_new + h_new
-                
-                heapq.heappush(pq, (f_new, g_new, next_pos, path + [action]))
+
+                heapq.heappush(
+                    pq,
+                    (f_new, g_new, next_pos, path + [action])
+                )
 
         return None
